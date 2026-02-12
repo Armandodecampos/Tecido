@@ -228,13 +228,13 @@
 
         // --- Configurações de Física ---
         const DAMPING = 0.96;
-        const MASS = 0.15;
+        const MASS = 0.2;
         const GRAVITY = 981 * 1.2;
         const TIMESTEP = 18 / 1000;
 
-        const xSegs = 25; // Aumentei levemente para melhor detalhe da textura
-        const ySegs = 25;
-        const restDistance = 18;
+        const xSegs = 40;
+        const ySegs = 40;
+        const restDistance = 11;
 
         let particles = [];
         let constraints = [];
@@ -335,6 +335,53 @@
                 if (lineIntersect(p1_2d, p2_2d, cp1, cp2)) {
                     removeTrianglesConnecting(c.p1.index, c.p2.index);
                     constraints.splice(i, 1);
+                }
+            }
+        }
+
+        function handleSelfCollision() {
+            const minDistance = restDistance * 0.9;
+            const minDistanceSq = minDistance * minDistance;
+            const cellSize = restDistance * 1.5;
+            const grid = new Map();
+
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                const gx = Math.floor(p.position.x / cellSize);
+                const gy = Math.floor(p.position.y / cellSize);
+                const gz = Math.floor(p.position.z / cellSize);
+                const key = `${gx},${gy},${gz}`;
+                if (!grid.has(key)) grid.set(key, []);
+                grid.get(key).push(p);
+            }
+
+            const diff = new THREE.Vector3();
+            for (let i = 0; i < particles.length; i++) {
+                const p1 = particles[i];
+                const gx = Math.floor(p1.position.x / cellSize);
+                const gy = Math.floor(p1.position.y / cellSize);
+                const gz = Math.floor(p1.position.z / cellSize);
+
+                for (let x = -1; x <= 1; x++) {
+                    for (let y = -1; y <= 1; y++) {
+                        for (let z = -1; z <= 1; z++) {
+                            const key = `${gx + x},${gy + y},${gz + z}`;
+                            const neighbors = grid.get(key);
+                            if (neighbors) {
+                                for (let p2 of neighbors) {
+                                    if (p1 === p2) continue;
+                                    diff.subVectors(p1.position, p2.position);
+                                    const distSq = diff.lengthSq();
+                                    if (distSq < minDistanceSq && distSq > 0) {
+                                        const dist = Math.sqrt(distSq);
+                                        const correction = diff.multiplyScalar((minDistance - dist) / dist * 0.5);
+                                        if (p1.invMass !== 0) p1.position.add(correction);
+                                        if (p2.invMass !== 0) p2.position.sub(correction);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -637,12 +684,14 @@
                 draggedParticle.previous.copy(rayPoint);
             }
 
-            const iterations = 8;
+            const iterations = 16;
             for (let i = 0; i < iterations; i++) {
                 for (let constraint of constraints) {
                     constraint.satisfy();
                 }
             }
+
+            handleSelfCollision();
 
             for (let p of particles) {
                 if (p.position.y < -400) p.position.y = -400;
