@@ -6,7 +6,7 @@
     <title>Tecido 3D Personalizável</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; touch-action: none; }
-        
+
         #info {
             position: absolute;
             top: 20px;
@@ -19,7 +19,7 @@
             letter-spacing: 1px;
             z-index: 10;
         }
-        
+
         /* Botão de Configurações (Engrenagem) */
         #btn-settings {
             position: absolute;
@@ -169,6 +169,7 @@
         }
 
         #btn-grab { left: 30px; }
+        #btn-cut { left: 50%; transform: translateX(-50%); }
         #btn-rotate { right: 30px; }
 
         b { color: #4db8ff; }
@@ -178,7 +179,7 @@
 
     <div id="info">
         <b>MODO MOBILE:</b> Use os botões inferiores<br>
-        <b>DESKTOP:</b> Botão Esquerdo (Agarrar) | Direito (Girar)
+        <b>DESKTOP:</b> Botão Esquerdo (Agarrar/Cortar) | Direito (Girar)
     </div>
 
     <!-- Botão de Configurações -->
@@ -194,7 +195,7 @@
             <span>Personalizar Tecido</span>
             <button class="close-btn" id="close-settings">×</button>
         </div>
-        
+
         <div class="control-group">
             <label>Cor do Tecido</label>
             <input type="color" id="color-picker" value="#2244ff">
@@ -209,6 +210,7 @@
 
     <!-- Botões Virtuais -->
     <div id="btn-grab" class="touch-btn">AGARRAR</div>
+    <div id="btn-cut" class="touch-btn">FACA</div>
     <div id="btn-rotate" class="touch-btn">GIRAR</div>
 
     <script type="importmap">
@@ -225,14 +227,14 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
         // --- Configurações de Física ---
-        const DAMPING = 0.96;       
-        const MASS = 0.15;           
-        const GRAVITY = 981 * 1.2;  
-        const TIMESTEP = 18 / 1000; 
+        const DAMPING = 0.96;
+        const MASS = 0.15;
+        const GRAVITY = 981 * 1.2;
+        const TIMESTEP = 18 / 1000;
 
         const xSegs = 25; // Aumentei levemente para melhor detalhe da textura
-        const ySegs = 25; 
-        const restDistance = 18; 
+        const ySegs = 25;
+        const restDistance = 18;
 
         let particles = [];
         let constraints = [];
@@ -241,6 +243,7 @@
         let camera, scene, renderer, controls;
         let isDragging = false;
         let mousePos = new THREE.Vector2();
+        let prevMousePos = new THREE.Vector2();
         let raycaster = new THREE.Raycaster();
         let draggedParticle = null;
 
@@ -250,10 +253,11 @@
         // --- Classes de Física ---
 
         class Particle {
-            constructor(x, y, z, mass) {
+            constructor(x, y, z, mass, index) {
                 this.position = new THREE.Vector3(x, y, z);
                 this.previous = new THREE.Vector3(x, y, z);
-                this.a = new THREE.Vector3(0, 0, 0); 
+                this.index = index;
+                this.a = new THREE.Vector3(0, 0, 0);
                 this.invMass = 1 / mass;
                 this.tmp = new THREE.Vector3();
             }
@@ -291,6 +295,50 @@
             }
         }
 
+        // --- Funções Auxiliares de Corte ---
+
+        function lineIntersect(p1, p2, p3, p4) {
+            const x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
+            const x3 = p3.x, y3 = p3.y, x4 = p4.x, y4 = p4.y;
+            const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+            if (denom === 0) return false;
+            const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+            const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+            return (ua >= 0 && ua <= 1) && (ub >= 0 && ub <= 1);
+        }
+
+        function removeTrianglesConnecting(idxA, idxB) {
+            const idxAttr = clothGeometry.getIndex();
+            for (let i = 0; i < idxAttr.count; i += 3) {
+                const a = idxAttr.getX(i);
+                const b = idxAttr.getX(i + 1);
+                const c = idxAttr.getX(i + 2);
+                if ((a === idxA && b === idxB) || (a === idxB && b === idxA) ||
+                    (b === idxA && c === idxB) || (b === idxB && c === idxA) ||
+                    (a === idxA && c === idxB) || (a === idxB && c === idxA)) {
+                    idxAttr.setXYZ(i, 0, 0, 0);
+                }
+            }
+            idxAttr.needsUpdate = true;
+        }
+
+        function cutConstraints(p1_2d, p2_2d) {
+            const projectedPositions = particles.map(p => {
+                const v = p.position.clone().project(camera);
+                return new THREE.Vector2(v.x, v.y);
+            });
+
+            for (let i = constraints.length - 1; i >= 0; i--) {
+                const c = constraints[i];
+                const cp1 = projectedPositions[c.p1.index];
+                const cp2 = projectedPositions[c.p2.index];
+                if (lineIntersect(p1_2d, p2_2d, cp1, cp2)) {
+                    removeTrianglesConnecting(c.p1.index, c.p2.index);
+                    constraints.splice(i, 1);
+                }
+            }
+        }
+
         // --- Inicialização ---
 
         init();
@@ -312,7 +360,7 @@
             spotlight.shadow.mapSize.width = 2048;
             spotlight.shadow.mapSize.height = 2048;
             scene.add(spotlight);
-            
+
             // Luz de preenchimento
             const fillLight = new THREE.DirectionalLight(0x444455, 1);
             fillLight.position.set(-200, 200, -200);
@@ -332,12 +380,12 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             // Configuração importante para cores corretas nas texturas
-            renderer.outputColorSpace = THREE.SRGBColorSpace; 
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
             document.body.appendChild(renderer.domElement);
 
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
-            
+
             controls.mouseButtons = {
                 LEFT: null,
                 MIDDLE: THREE.MOUSE.DOLLY,
@@ -349,18 +397,29 @@
             };
 
             window.addEventListener('resize', onWindowResize);
-            
+
             renderer.domElement.addEventListener('pointerdown', onPointerDown);
             renderer.domElement.addEventListener('pointermove', onPointerMove);
             window.addEventListener('pointerup', onPointerUp);
 
             const btnGrab = document.getElementById('btn-grab');
+            const btnCut = document.getElementById('btn-cut');
             const btnRotate = document.getElementById('btn-rotate');
 
             btnGrab.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
                 activeMode = 'grab';
                 btnGrab.classList.add('active');
+                btnCut.classList.remove('active');
+                btnRotate.classList.remove('active');
+                controls.enabled = false;
+            });
+
+            btnCut.addEventListener('pointerdown', (e) => {
+                e.stopPropagation();
+                activeMode = 'cut';
+                btnCut.classList.add('active');
+                btnGrab.classList.remove('active');
                 btnRotate.classList.remove('active');
                 controls.enabled = false;
             });
@@ -370,6 +429,7 @@
                 activeMode = 'rotate';
                 btnRotate.classList.add('active');
                 btnGrab.classList.remove('active');
+                btnCut.classList.remove('active');
                 controls.enabled = true;
                 controls.touches.ONE = THREE.TOUCH.ROTATE;
             });
@@ -395,9 +455,10 @@
                         (u - xSegs/2) * restDistance,
                         (ySegs/2 - v) * restDistance + 150,
                         0,
-                        MASS
+                        MASS,
+                        particles.length
                     );
-                    if (v === 0) p.invMass = 0; 
+                    if (v === 0) p.invMass = 0;
                     particles.push(p);
                 }
             }
@@ -463,16 +524,16 @@
                         // Configurações para a textura ficar bonita
                         texture.colorSpace = THREE.SRGBColorSpace;
                         texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                        
+
                         // Aplica ao material
                         clothMaterial.map = texture;
                         clothMaterial.needsUpdate = true;
-                        
-                        // Se quiser ver a textura pura, setamos a cor para branco, 
+
+                        // Se quiser ver a textura pura, setamos a cor para branco,
                         // senão a cor atual "tinge" a foto. Vamos resetar para branco.
                         clothMaterial.color.setHex(0xffffff);
                         colorPicker.value = "#ffffff";
-                        
+
                         removeTexBtn.style.display = 'block';
                     });
                 };
@@ -494,13 +555,21 @@
 
         function onPointerDown(event) {
             if (activeMode === 'rotate' || (event.pointerType === 'mouse' && event.button !== 0)) return;
-            
+
             // Impede clique através do painel de configurações
             if (event.target.closest('#settings-panel') || event.target.closest('#btn-settings')) return;
 
             updateMousePos(event);
+
+            if (activeMode === 'cut') {
+                isDragging = true;
+                prevMousePos.copy(mousePos);
+                controls.enabled = false;
+                return;
+            }
+
             raycaster.setFromCamera(mousePos, camera);
-            
+
             let minDist = Infinity;
             let targetPart = null;
 
@@ -508,8 +577,8 @@
                 const p = particles[i];
                 const screenPos = p.position.clone().project(camera);
                 const dist = mousePos.distanceTo(new THREE.Vector2(screenPos.x, screenPos.y));
-                
-                if (dist < 0.1) { 
+
+                if (dist < 0.1) {
                     const depth = p.position.z;
                     if (depth < minDist) {
                         minDist = depth;
@@ -527,12 +596,16 @@
 
         function onPointerMove(event) {
             updateMousePos(event);
+            if (activeMode === 'cut' && isDragging) {
+                cutConstraints(prevMousePos, mousePos);
+                prevMousePos.copy(mousePos);
+            }
         }
 
         function onPointerUp() {
             isDragging = false;
             draggedParticle = null;
-            if (activeMode !== 'grab') {
+            if (activeMode !== 'grab' && activeMode !== 'cut') {
                 controls.enabled = true;
             }
         }
