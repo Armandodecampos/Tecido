@@ -232,9 +232,9 @@
         const GRAVITY = 981 * 1.2;
         const TIMESTEP = 18 / 1000;
 
-        const xSegs = 40;
-        const ySegs = 40;
-        const restDistance = 11;
+        const xSegs = 35;
+        const ySegs = 35;
+        const restDistance = 12.8;
 
         let particles = [];
         let constraints = [];
@@ -246,6 +246,12 @@
         let prevMousePos = new THREE.Vector2();
         let raycaster = new THREE.Raycaster();
         let draggedParticle = null;
+
+        // Vetores reutilizáveis para otimização
+        const _diff = new THREE.Vector3();
+        const _correction = new THREE.Vector3();
+        const _tmpForce = new THREE.Vector3();
+        const _forceGravity = new THREE.Vector3();
 
         // Estado do toque
         let activeMode = 'none';
@@ -263,7 +269,10 @@
             }
 
             addForce(force) {
-                if (this.invMass > 0) this.a.add(force.clone().multiplyScalar(this.invMass));
+                if (this.invMass > 0) {
+                    _tmpForce.copy(force).multiplyScalar(this.invMass);
+                    this.a.add(_tmpForce);
+                }
             }
 
             integrate(timesq) {
@@ -285,13 +294,12 @@
             }
 
             satisfy() {
-                const diff = new THREE.Vector3().subVectors(this.p2.position, this.p1.position);
-                const currentDist = diff.length();
+                _diff.subVectors(this.p2.position, this.p1.position);
+                const currentDist = _diff.length();
                 if (currentDist === 0) return;
-                const correction = diff.multiplyScalar(1 - this.length / currentDist);
-                const correctionHalf = correction.multiplyScalar(0.5);
-                if (this.p1.invMass !== 0) this.p1.position.add(correctionHalf);
-                if (this.p2.invMass !== 0) this.p2.position.sub(correctionHalf);
+                _correction.copy(_diff).multiplyScalar((1 - this.length / currentDist) * 0.5);
+                if (this.p1.invMass !== 0) this.p1.position.add(_correction);
+                if (this.p2.invMass !== 0) this.p2.position.sub(_correction);
             }
         }
 
@@ -345,17 +353,26 @@
             const cellSize = restDistance * 1.5;
             const grid = new Map();
 
+            // Spatial Hashing Function
+            const getHash = (x, y, z) => {
+                return ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) & 0x7fffffff;
+            };
+
             for (let i = 0; i < particles.length; i++) {
                 const p = particles[i];
                 const gx = Math.floor(p.position.x / cellSize);
                 const gy = Math.floor(p.position.y / cellSize);
                 const gz = Math.floor(p.position.z / cellSize);
-                const key = `${gx},${gy},${gz}`;
-                if (!grid.has(key)) grid.set(key, []);
-                grid.get(key).push(p);
+                const hash = getHash(gx, gy, gz);
+
+                let cell = grid.get(hash);
+                if (cell === undefined) {
+                    cell = [];
+                    grid.set(hash, cell);
+                }
+                cell.push(p);
             }
 
-            const diff = new THREE.Vector3();
             for (let i = 0; i < particles.length; i++) {
                 const p1 = particles[i];
                 const gx = Math.floor(p1.position.x / cellSize);
@@ -365,18 +382,21 @@
                 for (let x = -1; x <= 1; x++) {
                     for (let y = -1; y <= 1; y++) {
                         for (let z = -1; z <= 1; z++) {
-                            const key = `${gx + x},${gy + y},${gz + z}`;
-                            const neighbors = grid.get(key);
-                            if (neighbors) {
-                                for (let p2 of neighbors) {
+                            const hash = getHash(gx + x, gy + y, gz + z);
+                            const neighbors = grid.get(hash);
+                            if (neighbors !== undefined) {
+                                for (let j = 0; j < neighbors.length; j++) {
+                                    const p2 = neighbors[j];
                                     if (p1 === p2) continue;
-                                    diff.subVectors(p1.position, p2.position);
-                                    const distSq = diff.lengthSq();
+
+                                    _diff.subVectors(p1.position, p2.position);
+                                    const distSq = _diff.lengthSq();
                                     if (distSq < minDistanceSq && distSq > 0) {
                                         const dist = Math.sqrt(distSq);
-                                        const correction = diff.multiplyScalar((minDistance - dist) / dist * 0.5);
-                                        if (p1.invMass !== 0) p1.position.add(correction);
-                                        if (p2.invMass !== 0) p2.position.sub(correction);
+                                        const factor = (minDistance - dist) / dist * 0.5;
+                                        _correction.copy(_diff).multiplyScalar(factor);
+                                        if (p1.invMass !== 0) p1.position.add(_correction);
+                                        if (p2.invMass !== 0) p2.position.sub(_correction);
                                     }
                                 }
                             }
@@ -669,9 +689,9 @@
         }
 
         function simulate() {
-            const forceGravity = new THREE.Vector3(0, -GRAVITY * MASS, 0);
+            _forceGravity.set(0, -GRAVITY * MASS, 0);
             for (let p of particles) {
-                p.addForce(forceGravity);
+                p.addForce(_forceGravity);
                 p.integrate(TIMESTEP * TIMESTEP);
             }
 
@@ -684,7 +704,7 @@
                 draggedParticle.previous.copy(rayPoint);
             }
 
-            const iterations = 16;
+            const iterations = 12;
             for (let i = 0; i < iterations; i++) {
                 for (let constraint of constraints) {
                     constraint.satisfy();
