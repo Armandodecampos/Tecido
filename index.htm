@@ -378,8 +378,11 @@
         setupUI();
         animate();
 
-        setTimeout(() => {
-            createCloth(0xff4422);
+        const swapColors = [0xff4422, 0x22ff44, 0xffcc22, 0xff22cc, 0x2244ff];
+        let colorIndex = 0;
+        setInterval(() => {
+            createCloth(swapColors[colorIndex]);
+            colorIndex = (colorIndex + 1) % swapColors.length;
         }, 1000);
 
         function init() {
