@@ -231,7 +231,6 @@
         const MASS = 0.04;
         const GRAVITY = 981 * 1.2;
         const TIMESTEP = 18 / 1000;
-
         const xSegs = 100;
         const ySegs = 100;
         const restDistance = 4.5;
@@ -247,6 +246,12 @@
         let prevMousePos = new THREE.Vector2();
         let raycaster = new THREE.Raycaster();
         let draggedParticle = null;
+
+        // Vetores reutilizáveis para otimização
+        const _diff = new THREE.Vector3();
+        const _correction = new THREE.Vector3();
+        const _tmpForce = new THREE.Vector3();
+        const _forceGravity = new THREE.Vector3();
 
         // Estado do toque
         let activeMode = 'none';
@@ -382,6 +387,11 @@
             }
             gridHeads.fill(-1);
 
+            // Spatial Hashing Function
+            const getHash = (x, y, z) => {
+                return ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) & 0x7fffffff;
+            };
+
             for (let i = 0; i < particles.length; i++) {
                 const p = particles[i];
                 const gx = Math.floor(p.position.x / cellSize);
@@ -392,7 +402,6 @@
                 gridHeads[h] = i;
             }
 
-            const diff = new THREE.Vector3();
             for (let i = 0; i < particles.length; i++) {
                 const p1 = particles[i];
                 const gx = Math.floor(p1.position.x / cellSize);
@@ -411,9 +420,10 @@
                                     const distSq = diff.lengthSq();
                                     if (distSq < minDistanceSq && distSq > 0) {
                                         const dist = Math.sqrt(distSq);
-                                        const correction = diff.multiplyScalar((minDistance - dist) / dist * 0.5);
-                                        if (p1.invMass !== 0) p1.position.add(correction);
-                                        if (p2.invMass !== 0) p2.position.sub(correction);
+                                        const factor = (minDistance - dist) / dist * 0.5;
+                                        _correction.copy(_diff).multiplyScalar(factor);
+                                        if (p1.invMass !== 0) p1.position.add(_correction);
+                                        if (p2.invMass !== 0) p2.position.sub(_correction);
                                     }
                                 }
                                 p2idx = gridNext[p2idx];
@@ -738,7 +748,7 @@
         function simulate() {
             forceGravity.set(0, -GRAVITY * MASS, 0);
             for (let p of particles) {
-                p.addForce(forceGravity);
+                p.addForce(_forceGravity);
                 p.integrate(TIMESTEP * TIMESTEP);
             }
 
@@ -751,7 +761,7 @@
                 draggedParticle.previous.copy(rayPoint);
             }
 
-            const iterations = 16;
+            const iterations = 12;
             for (let i = 0; i < iterations; i++) {
                 for (let constraint of constraints) {
                     constraint.satisfy();
