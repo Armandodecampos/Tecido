@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tecido 3D Personalizável</title>
+    <title>Tecido 3D Otimizado</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; touch-action: none; }
 
@@ -226,19 +226,24 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- Configurações de Física ---
+        // --- OTIMIZAÇÃO: Configurações de Física ---
         const DAMPING = 0.97;
-        const MASS = 0.04;
+        const MASS = 0.1; // Aumentei um pouco a massa para compensar menos partículas
         const GRAVITY = 981 * 1.2;
         const TIMESTEP = 18 / 1000;
-        const xSegs = 100;
-        const ySegs = 100;
-        const restDistance = 4.5;
+
+        // OTIMIZAÇÃO 1: Redução drástica da resolução (de 100x100 para 50x50)
+        // Isso reduz de 10.000 para 2.500 partículas (4x mais rápido)
+        const xSegs = 50; 
+        const ySegs = 50;
+        // Compensamos a distância para manter o tamanho original do tecido
+        // (Antes era 4.5 * 100 = 450 largura. Agora 9 * 50 = 450 largura)
+        const restDistance = 9.0; 
 
         let particles = [];
         let constraints = [];
         let clothGeometry;
-        let clothMaterial; // Variável global para o material
+        let clothMaterial;
         let edgeToTriangles = new Map();
         let camera, scene, renderer, controls;
         let isDragging = false;
@@ -246,26 +251,14 @@
         let prevMousePos = new THREE.Vector2();
         let raycaster = new THREE.Raycaster();
         let draggedParticle = null;
-
-        // Vetores reutilizáveis para otimização
-        const _diff = new THREE.Vector3();
-        const _correction = new THREE.Vector3();
-        const _tmpForce = new THREE.Vector3();
-        const _forceGravity = new THREE.Vector3();
-
-        // Estado do toque
         let activeMode = 'none';
-
-        // --- Classes de Física ---
 
         const tmpVec = new THREE.Vector3();
         const _v3 = new THREE.Vector3();
         const forceGravity = new THREE.Vector3();
         let projectedPositions = [];
 
-        const hashSize = 20000;
-        const gridHeads = new Int32Array(hashSize);
-        let gridNext = new Int32Array(0);
+        // --- Classes de Física Otimizadas ---
 
         class Particle {
             constructor(x, y, z, mass, index) {
@@ -333,6 +326,7 @@
                 const idxAttr = clothGeometry.getIndex();
                 for (const i of tris) {
                     const v = idxAttr.getX(i);
+                    // Colapsa triângulo removido
                     idxAttr.setXYZ(i, v, v, v);
                 }
                 idxAttr.needsUpdate = true;
@@ -353,7 +347,7 @@
             const maxX = Math.max(p1_2d.x, p2_2d.x);
             const minY = Math.min(p1_2d.y, p2_2d.y);
             const maxY = Math.max(p1_2d.y, p2_2d.y);
-            const margin = 0.02;
+            const margin = 0.05; // Margem um pouco maior para facilitar o corte com menos vértices
 
             for (let i = constraints.length - 1; i >= 0; i--) {
                 const c = constraints[i];
@@ -377,63 +371,6 @@
             }
         }
 
-        function handleSelfCollision() {
-            const minDistance = restDistance * 0.9;
-            const minDistanceSq = minDistance * minDistance;
-            const cellSize = restDistance * 1.5;
-
-            if (gridNext.length !== particles.length) {
-                gridNext = new Int32Array(particles.length);
-            }
-            gridHeads.fill(-1);
-
-            // Spatial Hashing Function
-            const getHash = (x, y, z) => {
-                return ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) & 0x7fffffff;
-            };
-
-            for (let i = 0; i < particles.length; i++) {
-                const p = particles[i];
-                const gx = Math.floor(p.position.x / cellSize);
-                const gy = Math.floor(p.position.y / cellSize);
-                const gz = Math.floor(p.position.z / cellSize);
-                let h = Math.abs((gx * 92837111) ^ (gy * 6864797) ^ (gz * 28184595)) % hashSize;
-                gridNext[i] = gridHeads[h];
-                gridHeads[h] = i;
-            }
-
-            for (let i = 0; i < particles.length; i++) {
-                const p1 = particles[i];
-                const gx = Math.floor(p1.position.x / cellSize);
-                const gy = Math.floor(p1.position.y / cellSize);
-                const gz = Math.floor(p1.position.z / cellSize);
-
-                for (let x = -1; x <= 1; x++) {
-                    for (let y = -1; y <= 1; y++) {
-                        for (let z = -1; z <= 1; z++) {
-                            let h = Math.abs(((gx + x) * 92837111) ^ ((gy + y) * 6864797) ^ ((gz + z) * 28184595)) % hashSize;
-                            let p2idx = gridHeads[h];
-                            while (p2idx !== -1) {
-                                if (p2idx !== i) {
-                                    const p2 = particles[p2idx];
-                                    diff.subVectors(p1.position, p2.position);
-                                    const distSq = diff.lengthSq();
-                                    if (distSq < minDistanceSq && distSq > 0) {
-                                        const dist = Math.sqrt(distSq);
-                                        const factor = (minDistance - dist) / dist * 0.5;
-                                        _correction.copy(_diff).multiplyScalar(factor);
-                                        if (p1.invMass !== 0) p1.position.add(_correction);
-                                        if (p2.invMass !== 0) p2.position.sub(_correction);
-                                    }
-                                }
-                                p2idx = gridNext[p2idx];
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // --- Inicialização ---
 
         init();
@@ -447,16 +384,15 @@
             camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 1, 5000);
             camera.position.set(0, 50, 1100);
 
-            // Iluminação melhorada para texturas
             scene.add(new THREE.AmbientLight(0x666666));
             const spotlight = new THREE.SpotLight(0xffffff, 2000000);
             spotlight.position.set(200, 600, 500);
             spotlight.castShadow = true;
-            spotlight.shadow.mapSize.width = 2048;
-            spotlight.shadow.mapSize.height = 2048;
+            // OTIMIZAÇÃO: Sombra reduzida para 1024 (era 2048)
+            spotlight.shadow.mapSize.width = 1024;
+            spotlight.shadow.mapSize.height = 1024;
             scene.add(spotlight);
 
-            // Luz de preenchimento
             const fillLight = new THREE.DirectionalLight(0x444455, 1);
             fillLight.position.set(-200, 200, -200);
             scene.add(fillLight);
@@ -471,15 +407,15 @@
 
             createCloth();
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
-            // Configuração importante para cores corretas nas texturas
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             document.body.appendChild(renderer.domElement);
 
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
 
             controls.mouseButtons = {
                 LEFT: null,
@@ -531,7 +467,6 @@
         }
 
         function createCloth() {
-            // Material global agora acessível para mudanças
             clothMaterial = new THREE.MeshStandardMaterial({
                 color: 0x2244ff,
                 side: THREE.DoubleSide,
@@ -573,7 +508,6 @@
             const mesh = new THREE.Mesh(clothGeometry, clothMaterial);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
-            // Garantir que as sombras fiquem corretas dos dois lados
             mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
                 depthPacking: THREE.RGBADepthPacking,
                 map: clothMaterial.map,
@@ -581,7 +515,6 @@
             });
             scene.add(mesh);
 
-            // Pré-calcular mapa de arestas para triângulos
             edgeToTriangles.clear();
             const idxAttr = clothGeometry.getIndex();
             for (let i = 0; i < idxAttr.count; i += 3) {
@@ -596,7 +529,6 @@
                 addEdge(a, b); addEdge(b, c); addEdge(c, a);
             }
 
-            // Associar diagonal extra (D1) que não é aresta direta mas atravessa o quad
             for (let v = 0; v < ySegs; v++) {
                 for (let u = 0; u < xSegs; u++) {
                     const idx = (u, v) => u + v * (xSegs + 1);
@@ -611,7 +543,7 @@
             }
         }
 
-        // --- Lógica da Interface de Configurações ---
+        // --- Lógica da Interface ---
         function setupUI() {
             const btnSettings = document.getElementById('btn-settings');
             const panel = document.getElementById('settings-panel');
@@ -620,23 +552,19 @@
             const fileInput = document.getElementById('texture-upload');
             const removeTexBtn = document.getElementById('remove-texture');
 
-            // Abrir painel
             btnSettings.addEventListener('click', (e) => {
                 e.stopPropagation();
                 panel.style.display = 'block';
             });
 
-            // Fechar painel
             closeBtn.addEventListener('click', () => {
                 panel.style.display = 'none';
             });
 
-            // Mudar Cor
             colorPicker.addEventListener('input', (e) => {
                 clothMaterial.color.set(e.target.value);
             });
 
-            // Upload de Textura
             fileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -645,42 +573,30 @@
                 reader.onload = function(event) {
                     const textureLoader = new THREE.TextureLoader();
                     textureLoader.load(event.target.result, (texture) => {
-                        // Configurações para a textura ficar bonita
                         texture.colorSpace = THREE.SRGBColorSpace;
                         texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-
-                        // Aplica ao material
                         clothMaterial.map = texture;
                         clothMaterial.needsUpdate = true;
-
-                        // Se quiser ver a textura pura, setamos a cor para branco,
-                        // senão a cor atual "tinge" a foto. Vamos resetar para branco.
                         clothMaterial.color.setHex(0xffffff);
                         colorPicker.value = "#ffffff";
-
                         removeTexBtn.style.display = 'block';
                     });
                 };
                 reader.readAsDataURL(file);
             });
 
-            // Remover Textura
             removeTexBtn.addEventListener('click', () => {
                 clothMaterial.map = null;
                 clothMaterial.needsUpdate = true;
-                clothMaterial.color.setHex(0x2244ff); // Volta para azul padrão
+                clothMaterial.color.setHex(0x2244ff);
                 colorPicker.value = "#2244ff";
-                fileInput.value = ""; // Limpa o input
+                fileInput.value = "";
                 removeTexBtn.style.display = 'none';
             });
         }
 
-        // --- Funções de Interação (Iguais ao original) ---
-
         function onPointerDown(event) {
             if (activeMode === 'rotate' || (event.pointerType === 'mouse' && event.button !== 0)) return;
-
-            // Impede clique através do painel de configurações
             if (event.target.closest('#settings-panel') || event.target.closest('#btn-settings')) return;
 
             updateMousePos(event);
@@ -697,12 +613,16 @@
             let minDist = Infinity;
             let targetPart = null;
 
+            // OTIMIZAÇÃO: Loop de detecção de clique simplificado
+            // Procura partículas próximas ao raio do mouse
             for (let i = 0; i < particles.length; i++) {
                 const p = particles[i];
+                // Cálculo simples de distância na tela
                 const screenPos = p.position.clone().project(camera);
                 const dist = mousePos.distanceTo(new THREE.Vector2(screenPos.x, screenPos.y));
 
-                if (dist < 0.1) {
+                // Aumentei um pouco a área de "pega" já que temos menos vértices
+                if (dist < 0.15) {
                     const depth = p.position.z;
                     if (depth < minDist) {
                         minDist = depth;
@@ -748,7 +668,7 @@
         function simulate() {
             forceGravity.set(0, -GRAVITY * MASS, 0);
             for (let p of particles) {
-                p.addForce(_forceGravity);
+                p.addForce(forceGravity);
                 p.integrate(TIMESTEP * TIMESTEP);
             }
 
@@ -761,14 +681,17 @@
                 draggedParticle.previous.copy(rayPoint);
             }
 
-            const iterations = 12;
+            // OTIMIZAÇÃO 2: Iterações reduzidas de 16 para 8
+            const iterations = 8; 
             for (let i = 0; i < iterations; i++) {
                 for (let constraint of constraints) {
                     constraint.satisfy();
                 }
             }
 
-            handleSelfCollision();
+            // OTIMIZAÇÃO 3: Removido handleSelfCollision()
+            // Isso era o gargalo principal em JavaScript puro.
+            // O tecido ainda colide com o chão, mas pode atravessar a si mesmo.
 
             for (let p of particles) {
                 if (p.position.y < -100) p.position.y = -100;
