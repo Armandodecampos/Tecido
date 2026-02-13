@@ -244,6 +244,7 @@
         let constraints = [];
         let clothGeometry;
         let clothMaterial;
+        let clothMesh;
         let edgeToTriangles = new Map();
         let camera, scene, renderer, controls;
         let isDragging = false;
@@ -377,6 +378,10 @@
         setupUI();
         animate();
 
+        setTimeout(() => {
+            createCloth(0xff4422);
+        }, 1000);
+
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x0a0a0a);
@@ -466,9 +471,19 @@
             });
         }
 
-        function createCloth() {
+        function createCloth(color = 0x2244ff) {
+            if (clothMesh) {
+                scene.remove(clothMesh);
+                if (clothGeometry) clothGeometry.dispose();
+                if (clothMaterial) {
+                    if (clothMaterial.map) clothMaterial.map.dispose();
+                    clothMaterial.dispose();
+                }
+                if (clothMesh.customDepthMaterial) clothMesh.customDepthMaterial.dispose();
+            }
+
             clothMaterial = new THREE.MeshStandardMaterial({
-                color: 0x2244ff,
+                color: color,
                 side: THREE.DoubleSide,
                 roughness: 0.5,
                 metalness: 0.2,
@@ -505,15 +520,15 @@
             }
 
             clothGeometry = new THREE.PlaneGeometry(1, 1, xSegs, ySegs);
-            const mesh = new THREE.Mesh(clothGeometry, clothMaterial);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
+            clothMesh = new THREE.Mesh(clothGeometry, clothMaterial);
+            clothMesh.castShadow = true;
+            clothMesh.receiveShadow = true;
+            clothMesh.customDepthMaterial = new THREE.MeshDepthMaterial({
                 depthPacking: THREE.RGBADepthPacking,
                 map: clothMaterial.map,
                 alphaTest: 0.5
             });
-            scene.add(mesh);
+            scene.add(clothMesh);
 
             edgeToTriangles.clear();
             const idxAttr = clothGeometry.getIndex();
