@@ -227,19 +227,19 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
         // --- Configurações de Física ---
-        const DAMPING = 0.96;
-        const MASS = 0.2;
+        const DAMPING = 0.97;
+        const MASS = 0.04;
         const GRAVITY = 981 * 1.2;
         const TIMESTEP = 18 / 1000;
-
-        const xSegs = 35;
-        const ySegs = 35;
-        const restDistance = 12.8;
+        const xSegs = 100;
+        const ySegs = 100;
+        const restDistance = 4.5;
 
         let particles = [];
         let constraints = [];
         let clothGeometry;
         let clothMaterial; // Variável global para o material
+        let edgeToTriangles = new Map();
         let camera, scene, renderer, controls;
         let isDragging = false;
         let mousePos = new THREE.Vector2();
@@ -258,6 +258,15 @@
 
         // --- Classes de Física ---
 
+        const tmpVec = new THREE.Vector3();
+        const _v3 = new THREE.Vector3();
+        const forceGravity = new THREE.Vector3();
+        let projectedPositions = [];
+
+        const hashSize = 20000;
+        const gridHeads = new Int32Array(hashSize);
+        let gridNext = new Int32Array(0);
+
         class Particle {
             constructor(x, y, z, mass, index) {
                 this.position = new THREE.Vector3(x, y, z);
@@ -270,8 +279,8 @@
 
             addForce(force) {
                 if (this.invMass > 0) {
-                    _tmpForce.copy(force).multiplyScalar(this.invMass);
-                    this.a.add(_tmpForce);
+                    tmpVec.copy(force).multiplyScalar(this.invMass);
+                    this.a.add(tmpVec);
                 }
             }
 
@@ -279,7 +288,8 @@
                 if (this.invMass === 0) return;
                 const newPos = this.tmp.subVectors(this.position, this.previous);
                 newPos.multiplyScalar(DAMPING).add(this.position);
-                newPos.add(this.a.multiplyScalar(timesq));
+                tmpVec.copy(this.a).multiplyScalar(timesq);
+                newPos.add(tmpVec);
                 this.previous.copy(this.position);
                 this.position.copy(newPos);
                 this.a.set(0, 0, 0);
@@ -294,12 +304,13 @@
             }
 
             satisfy() {
-                _diff.subVectors(this.p2.position, this.p1.position);
-                const currentDist = _diff.length();
+                tmpVec.subVectors(this.p2.position, this.p1.position);
+                const currentDist = tmpVec.length();
                 if (currentDist === 0) return;
-                _correction.copy(_diff).multiplyScalar((1 - this.length / currentDist) * 0.5);
-                if (this.p1.invMass !== 0) this.p1.position.add(_correction);
-                if (this.p2.invMass !== 0) this.p2.position.sub(_correction);
+                const correction = (1 - this.length / currentDist) * 0.5;
+                tmpVec.multiplyScalar(correction);
+                if (this.p1.invMass !== 0) this.p1.position.add(tmpVec);
+                if (this.p2.invMass !== 0) this.p2.position.sub(tmpVec);
             }
         }
 
@@ -316,30 +327,49 @@
         }
 
         function removeTrianglesConnecting(idxA, idxB) {
-            const idxAttr = clothGeometry.getIndex();
-            for (let i = 0; i < idxAttr.count; i += 3) {
-                const a = idxAttr.getX(i);
-                const b = idxAttr.getX(i + 1);
-                const c = idxAttr.getX(i + 2);
-                if ((a === idxA && b === idxB) || (a === idxB && b === idxA) ||
-                    (b === idxA && c === idxB) || (b === idxB && c === idxA) ||
-                    (a === idxA && c === idxB) || (a === idxB && c === idxA)) {
-                    idxAttr.setXYZ(i, 0, 0, 0);
+            const key = idxA < idxB ? `${idxA}_${idxB}` : `${idxB}_${idxA}`;
+            const tris = edgeToTriangles.get(key);
+            if (tris) {
+                const idxAttr = clothGeometry.getIndex();
+                for (const i of tris) {
+                    const v = idxAttr.getX(i);
+                    idxAttr.setXYZ(i, v, v, v);
                 }
+                idxAttr.needsUpdate = true;
             }
-            idxAttr.needsUpdate = true;
         }
 
         function cutConstraints(p1_2d, p2_2d) {
-            const projectedPositions = particles.map(p => {
-                const v = p.position.clone().project(camera);
-                return new THREE.Vector2(v.x, v.y);
-            });
+            if (projectedPositions.length !== particles.length) {
+                projectedPositions = particles.map(() => new THREE.Vector2());
+            }
+
+            for (let i = 0; i < particles.length; i++) {
+                _v3.copy(particles[i].position).project(camera);
+                projectedPositions[i].set(_v3.x, _v3.y);
+            }
+
+            const minX = Math.min(p1_2d.x, p2_2d.x);
+            const maxX = Math.max(p1_2d.x, p2_2d.x);
+            const minY = Math.min(p1_2d.y, p2_2d.y);
+            const maxY = Math.max(p1_2d.y, p2_2d.y);
+            const margin = 0.02;
 
             for (let i = constraints.length - 1; i >= 0; i--) {
                 const c = constraints[i];
                 const cp1 = projectedPositions[c.p1.index];
                 const cp2 = projectedPositions[c.p2.index];
+
+                const cMinX = Math.min(cp1.x, cp2.x);
+                const cMaxX = Math.max(cp1.x, cp2.x);
+                const cMinY = Math.min(cp1.y, cp2.y);
+                const cMaxY = Math.max(cp1.y, cp2.y);
+
+                if (maxX < cMinX - margin || minX > cMaxX + margin ||
+                    maxY < cMinY - margin || minY > cMaxY + margin) {
+                    continue;
+                }
+
                 if (lineIntersect(p1_2d, p2_2d, cp1, cp2)) {
                     removeTrianglesConnecting(c.p1.index, c.p2.index);
                     constraints.splice(i, 1);
@@ -351,7 +381,11 @@
             const minDistance = restDistance * 0.9;
             const minDistanceSq = minDistance * minDistance;
             const cellSize = restDistance * 1.5;
-            const grid = new Map();
+
+            if (gridNext.length !== particles.length) {
+                gridNext = new Int32Array(particles.length);
+            }
+            gridHeads.fill(-1);
 
             // Spatial Hashing Function
             const getHash = (x, y, z) => {
@@ -363,14 +397,9 @@
                 const gx = Math.floor(p.position.x / cellSize);
                 const gy = Math.floor(p.position.y / cellSize);
                 const gz = Math.floor(p.position.z / cellSize);
-                const hash = getHash(gx, gy, gz);
-
-                let cell = grid.get(hash);
-                if (cell === undefined) {
-                    cell = [];
-                    grid.set(hash, cell);
-                }
-                cell.push(p);
+                let h = Math.abs((gx * 92837111) ^ (gy * 6864797) ^ (gz * 28184595)) % hashSize;
+                gridNext[i] = gridHeads[h];
+                gridHeads[h] = i;
             }
 
             for (let i = 0; i < particles.length; i++) {
@@ -382,15 +411,13 @@
                 for (let x = -1; x <= 1; x++) {
                     for (let y = -1; y <= 1; y++) {
                         for (let z = -1; z <= 1; z++) {
-                            const hash = getHash(gx + x, gy + y, gz + z);
-                            const neighbors = grid.get(hash);
-                            if (neighbors !== undefined) {
-                                for (let j = 0; j < neighbors.length; j++) {
-                                    const p2 = neighbors[j];
-                                    if (p1 === p2) continue;
-
-                                    _diff.subVectors(p1.position, p2.position);
-                                    const distSq = _diff.lengthSq();
+                            let h = Math.abs(((gx + x) * 92837111) ^ ((gy + y) * 6864797) ^ ((gz + z) * 28184595)) % hashSize;
+                            let p2idx = gridHeads[h];
+                            while (p2idx !== -1) {
+                                if (p2idx !== i) {
+                                    const p2 = particles[p2idx];
+                                    diff.subVectors(p1.position, p2.position);
+                                    const distSq = diff.lengthSq();
                                     if (distSq < minDistanceSq && distSq > 0) {
                                         const dist = Math.sqrt(distSq);
                                         const factor = (minDistance - dist) / dist * 0.5;
@@ -399,6 +426,7 @@
                                         if (p2.invMass !== 0) p2.position.sub(_correction);
                                     }
                                 }
+                                p2idx = gridNext[p2idx];
                             }
                         }
                     }
@@ -437,7 +465,7 @@
             const floorMat = new THREE.MeshPhongMaterial({ color: 0x080808 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
-            floor.position.y = -400;
+            floor.position.y = -100;
             floor.receiveShadow = true;
             scene.add(floor);
 
@@ -521,7 +549,7 @@
                     const p = new Particle(
                         (u - xSegs/2) * restDistance,
                         (ySegs/2 - v) * restDistance + 150,
-                        0,
+                        (Math.random() - 0.5) * 2,
                         MASS,
                         particles.length
                     );
@@ -552,6 +580,35 @@
                 alphaTest: 0.5
             });
             scene.add(mesh);
+
+            // Pré-calcular mapa de arestas para triângulos
+            edgeToTriangles.clear();
+            const idxAttr = clothGeometry.getIndex();
+            for (let i = 0; i < idxAttr.count; i += 3) {
+                const a = idxAttr.getX(i);
+                const b = idxAttr.getX(i + 1);
+                const c = idxAttr.getX(i + 2);
+                const addEdge = (v1, v2) => {
+                    const key = v1 < v2 ? `${v1}_${v2}` : `${v2}_${v1}`;
+                    if (!edgeToTriangles.has(key)) edgeToTriangles.set(key, []);
+                    edgeToTriangles.get(key).push(i);
+                };
+                addEdge(a, b); addEdge(b, c); addEdge(c, a);
+            }
+
+            // Associar diagonal extra (D1) que não é aresta direta mas atravessa o quad
+            for (let v = 0; v < ySegs; v++) {
+                for (let u = 0; u < xSegs; u++) {
+                    const idx = (u, v) => u + v * (xSegs + 1);
+                    const a = idx(u, v);
+                    const c = idx(u + 1, v + 1);
+                    const t1_idx = (u + v * xSegs) * 6;
+                    const t2_idx = t1_idx + 3;
+                    const key = a < c ? `${a}_${c}` : `${c}_${a}`;
+                    if (!edgeToTriangles.has(key)) edgeToTriangles.set(key, []);
+                    edgeToTriangles.get(key).push(t1_idx, t2_idx);
+                }
+            }
         }
 
         // --- Lógica da Interface de Configurações ---
@@ -689,7 +746,7 @@
         }
 
         function simulate() {
-            _forceGravity.set(0, -GRAVITY * MASS, 0);
+            forceGravity.set(0, -GRAVITY * MASS, 0);
             for (let p of particles) {
                 p.addForce(_forceGravity);
                 p.integrate(TIMESTEP * TIMESTEP);
@@ -714,7 +771,7 @@
             handleSelfCollision();
 
             for (let p of particles) {
-                if (p.position.y < -400) p.position.y = -400;
+                if (p.position.y < -100) p.position.y = -100;
             }
         }
 
