@@ -228,13 +228,13 @@
 
         // --- Configurações de Física ---
         const DAMPING = 0.96;
-        const MASS = 0.09;
+        const MASS = 0.05;
         const GRAVITY = 981 * 1.2;
         const TIMESTEP = 18 / 1000;
 
-        const xSegs = 60;
-        const ySegs = 60;
-        const restDistance = 7.33;
+        const xSegs = 80;
+        const ySegs = 80;
+        const restDistance = 5.5;
 
         let particles = [];
         let constraints = [];
@@ -255,7 +255,12 @@
 
         const tmpVec = new THREE.Vector3();
         const _v3 = new THREE.Vector3();
+        const forceGravity = new THREE.Vector3();
         let projectedPositions = [];
+
+        const hashSize = 10000;
+        const gridHeads = new Int32Array(hashSize);
+        let gridNext = new Int32Array(0);
 
         class Particle {
             constructor(x, y, z, mass, index) {
@@ -371,16 +376,20 @@
             const minDistance = restDistance * 0.9;
             const minDistanceSq = minDistance * minDistance;
             const cellSize = restDistance * 1.5;
-            const grid = new Map();
+
+            if (gridNext.length !== particles.length) {
+                gridNext = new Int32Array(particles.length);
+            }
+            gridHeads.fill(-1);
 
             for (let i = 0; i < particles.length; i++) {
                 const p = particles[i];
                 const gx = Math.floor(p.position.x / cellSize);
                 const gy = Math.floor(p.position.y / cellSize);
                 const gz = Math.floor(p.position.z / cellSize);
-                const key = `${gx},${gy},${gz}`;
-                if (!grid.has(key)) grid.set(key, []);
-                grid.get(key).push(p);
+                let h = Math.abs((gx * 92837111) ^ (gy * 6864797) ^ (gz * 28184595)) % hashSize;
+                gridNext[i] = gridHeads[h];
+                gridHeads[h] = i;
             }
 
             const diff = new THREE.Vector3();
@@ -393,11 +402,11 @@
                 for (let x = -1; x <= 1; x++) {
                     for (let y = -1; y <= 1; y++) {
                         for (let z = -1; z <= 1; z++) {
-                            const key = `${gx + x},${gy + y},${gz + z}`;
-                            const neighbors = grid.get(key);
-                            if (neighbors) {
-                                for (let p2 of neighbors) {
-                                    if (p1 === p2) continue;
+                            let h = Math.abs(((gx + x) * 92837111) ^ ((gy + y) * 6864797) ^ ((gz + z) * 28184595)) % hashSize;
+                            let p2idx = gridHeads[h];
+                            while (p2idx !== -1) {
+                                if (p2idx !== i) {
+                                    const p2 = particles[p2idx];
                                     diff.subVectors(p1.position, p2.position);
                                     const distSq = diff.lengthSq();
                                     if (distSq < minDistanceSq && distSq > 0) {
@@ -407,6 +416,7 @@
                                         if (p2.invMass !== 0) p2.position.sub(correction);
                                     }
                                 }
+                                p2idx = gridNext[p2idx];
                             }
                         }
                     }
@@ -445,7 +455,7 @@
             const floorMat = new THREE.MeshPhongMaterial({ color: 0x080808 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
-            floor.position.y = -400;
+            floor.position.y = -100;
             floor.receiveShadow = true;
             scene.add(floor);
 
@@ -726,7 +736,7 @@
         }
 
         function simulate() {
-            const forceGravity = new THREE.Vector3(0, -GRAVITY * MASS, 0);
+            forceGravity.set(0, -GRAVITY * MASS, 0);
             for (let p of particles) {
                 p.addForce(forceGravity);
                 p.integrate(TIMESTEP * TIMESTEP);
@@ -751,7 +761,7 @@
             handleSelfCollision();
 
             for (let p of particles) {
-                if (p.position.y < -400) p.position.y = -400;
+                if (p.position.y < -100) p.position.y = -100;
             }
         }
 
