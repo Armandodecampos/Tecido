@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tecido 3D Otimizado</title>
+    <title>Encontre a Bolinha</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; touch-action: none; }
 
@@ -15,129 +15,40 @@
             color: #ccc;
             pointer-events: none;
             text-shadow: 1px 1px 2px black;
-            font-size: 14px;
+            font-size: 18px;
+            font-weight: bold;
             letter-spacing: 1px;
             z-index: 10;
         }
 
-        /* Botão de Configurações (Engrenagem) */
-        #btn-settings {
+        #level-info {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 50px;
-            height: 50px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            cursor: pointer;
-            z-index: 30;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(5px);
-            transition: transform 0.2s, background 0.2s;
+            top: 50px;
+            width: 100%;
+            text-align: center;
+            color: #4db8ff;
+            pointer-events: none;
+            font-size: 16px;
+            z-index: 10;
         }
 
-        #btn-settings:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: rotate(90deg);
-        }
-
-        #btn-settings svg {
-            width: 24px;
-            height: 24px;
-            fill: #fff;
-        }
-
-        /* Painel de Configurações */
-        #settings-panel {
-            display: none; /* Oculto por padrão */
+        #victory-overlay {
+            display: none;
             position: absolute;
-            top: 80px;
-            left: 20px;
-            width: 280px;
-            background: rgba(20, 20, 20, 0.95);
-            border: 1px solid #444;
-            border-radius: 12px;
-            padding: 20px;
-            z-index: 40;
-            color: white;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            backdrop-filter: blur(10px);
-        }
-
-        .panel-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #444;
-            padding-bottom: 10px;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            color: #aaa;
-            font-size: 20px;
-            cursor: pointer;
-        }
-
-        .control-group {
-            margin-bottom: 15px;
-        }
-
-        .control-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 14px;
-            color: #aaa;
-        }
-
-        /* Inputs */
-        input[type="color"] {
-            width: 100%;
-            height: 40px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background: none;
-        }
-
-        input[type="file"] {
-            width: 100%;
-            font-size: 12px;
-            color: #ccc;
-        }
-
-        input[type="file"]::file-selector-button {
-            background: #4db8ff;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 4px;
-            color: #000;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #4db8ff;
+            padding: 40px;
+            border-radius: 20px;
+            font-size: 48px;
             font-weight: bold;
-            cursor: pointer;
-            margin-right: 10px;
-            transition: background 0.2s;
-        }
-
-        input[type="file"]::file-selector-button:hover {
-            background: #7eccff;
-        }
-
-        .remove-tex-btn {
-            background: #ff4d4d;
-            border: none;
-            width: 100%;
-            padding: 8px;
-            border-radius: 4px;
-            color: white;
-            cursor: pointer;
-            margin-top: 5px;
-            font-size: 12px;
-            display: none; /* Aparece só quando tem textura */
+            text-align: center;
+            z-index: 100;
+            border: 4px solid #4db8ff;
+            box-shadow: 0 0 20px #4db8ff;
+            pointer-events: none;
         }
 
         /* Estilização dos Botões Touch (Mobile) */
@@ -177,41 +88,12 @@
 </head>
 <body>
 
-    <div id="info">
-        <b>MODO MOBILE:</b> Use os botões inferiores<br>
-        <b>DESKTOP:</b> Botão Esquerdo (Agarrar/Cortar) | Direito (Girar)
-    </div>
+    <div id="info">Encontre a bolinha escondida sob os objetos! Arraste-os para o lado.</div>
+    <div id="level-info">Fase 1</div>
+    <div id="victory-overlay">VITÓRIA!</div>
 
-    <!-- Botão de Configurações -->
-    <div id="btn-settings" title="Configurações">
-        <svg viewBox="0 0 24 24">
-            <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
-        </svg>
-    </div>
-
-    <!-- Painel de Configurações -->
-    <div id="settings-panel">
-        <div class="panel-header">
-            <span>Personalizar Tecido</span>
-            <button class="close-btn" id="close-settings">×</button>
-        </div>
-
-        <div class="control-group">
-            <label>Cor do Tecido</label>
-            <input type="color" id="color-picker" value="#2244ff">
-        </div>
-
-        <div class="control-group">
-            <label>Estampa (Upload de Imagem)</label>
-            <input type="file" id="texture-upload" accept="image/*">
-            <button id="remove-texture" class="remove-tex-btn">Remover Estampa</button>
-        </div>
-    </div>
-
-    <!-- Botões Virtuais -->
-    <div id="btn-grab" class="touch-btn">AGARRAR</div>
-    <div id="btn-cut" class="touch-btn">FACA</div>
-    <div id="btn-rotate" class="touch-btn">GIRAR</div>
+    <!-- Botão Virtual (Mobile) -->
+    <div id="btn-grab" class="touch-btn active">AGARRAR</div>
 
     <script type="importmap">
         {
@@ -240,19 +122,24 @@
         // (Antes era 4.5 * 100 = 450 largura. Agora 9 * 50 = 450 largura)
         const restDistance = 9.0; 
 
-        let particles = [];
-        let constraints = [];
-        let clothGeometry;
-        let clothMaterial;
-        let clothMesh;
-        let edgeToTriangles = new Map();
+        let simulationObjects = [];
+        let targetBall = null;
+        let currentLevel = 0;
+        const levelConfigs = [
+            { type: 'cloth', count: 5, info: "Fase 1: Tecidos" },
+            { type: 'box', count: 8, info: "Fase 2: Cubos" },
+            { type: 'ball', count: 12, info: "Fase 3: Bolinhas" },
+            { type: 'mixed', count: 15, info: "Fase 4: Mistura" },
+            { type: 'mixed', count: 25, info: "Fase 5: Caos" },
+            { type: 'mixed', count: 40, info: "Fase Final: Onde está?" }
+        ];
         let camera, scene, renderer, controls;
         let isDragging = false;
         let mousePos = new THREE.Vector2();
         let prevMousePos = new THREE.Vector2();
         let raycaster = new THREE.Raycaster();
         let draggedParticle = null;
-        let activeMode = 'none';
+        let activeMode = 'grab';
 
         const tmpVec = new THREE.Vector3();
         const _v3 = new THREE.Vector3();
@@ -262,10 +149,9 @@
         // --- Classes de Física Otimizadas ---
 
         class Particle {
-            constructor(x, y, z, mass, index) {
+            constructor(x, y, z, mass) {
                 this.position = new THREE.Vector3(x, y, z);
                 this.previous = new THREE.Vector3(x, y, z);
-                this.index = index;
                 this.a = new THREE.Vector3(0, 0, 0);
                 this.invMass = 1 / mass;
                 this.tmp = new THREE.Vector3();
@@ -308,82 +194,197 @@
             }
         }
 
-        // --- Funções Auxiliares de Corte ---
-
-        function lineIntersect(p1, p2, p3, p4) {
-            const x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
-            const x3 = p3.x, y3 = p3.y, x4 = p4.x, y4 = p4.y;
-            const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-            if (denom === 0) return false;
-            const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
-            const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
-            return (ua >= 0 && ua <= 1) && (ub >= 0 && ub <= 1);
-        }
-
-        function removeTrianglesConnecting(idxA, idxB) {
-            const key = idxA < idxB ? `${idxA}_${idxB}` : `${idxB}_${idxA}`;
-            const tris = edgeToTriangles.get(key);
-            if (tris) {
-                const idxAttr = clothGeometry.getIndex();
-                for (const i of tris) {
-                    const v = idxAttr.getX(i);
-                    // Colapsa triângulo removido
-                    idxAttr.setXYZ(i, v, v, v);
+        class SimulationObject {
+            constructor() {
+                this.particles = [];
+                this.constraints = [];
+                this.mesh = null;
+            }
+            updateMesh() {}
+            dispose() {
+                if (this.mesh) {
+                    scene.remove(this.mesh);
+                    if (this.mesh.geometry) this.mesh.geometry.dispose();
+                    if (this.mesh.material) this.mesh.material.dispose();
                 }
-                idxAttr.needsUpdate = true;
             }
         }
 
-        function cutConstraints(p1_2d, p2_2d) {
-            if (projectedPositions.length !== particles.length) {
-                projectedPositions = particles.map(() => new THREE.Vector2());
-            }
+        class ClothObject extends SimulationObject {
+            constructor(x, y, z, color) {
+                super();
+                const localXSegs = 20;
+                const localYSegs = 20;
+                const localRestDist = 12.0;
 
-            for (let i = 0; i < particles.length; i++) {
-                _v3.copy(particles[i].position).project(camera);
-                projectedPositions[i].set(_v3.x, _v3.y);
-            }
+                const index = (u, v) => u + v * (localXSegs + 1);
 
-            const minX = Math.min(p1_2d.x, p2_2d.x);
-            const maxX = Math.max(p1_2d.x, p2_2d.x);
-            const minY = Math.min(p1_2d.y, p2_2d.y);
-            const maxY = Math.max(p1_2d.y, p2_2d.y);
-            const margin = 0.05; // Margem um pouco maior para facilitar o corte com menos vértices
-
-            for (let i = constraints.length - 1; i >= 0; i--) {
-                const c = constraints[i];
-                const cp1 = projectedPositions[c.p1.index];
-                const cp2 = projectedPositions[c.p2.index];
-
-                const cMinX = Math.min(cp1.x, cp2.x);
-                const cMaxX = Math.max(cp1.x, cp2.x);
-                const cMinY = Math.min(cp1.y, cp2.y);
-                const cMaxY = Math.max(cp1.y, cp2.y);
-
-                if (maxX < cMinX - margin || minX > cMaxX + margin ||
-                    maxY < cMinY - margin || minY > cMaxY + margin) {
-                    continue;
+                for (let v = 0; v <= localYSegs; v++) {
+                    for (let u = 0; u <= localXSegs; u++) {
+                        const p = new Particle(
+                            x + (u - localXSegs/2) * localRestDist,
+                            y + (localYSegs/2 - v) * localRestDist,
+                            z + (Math.random() - 0.5) * 2,
+                            MASS
+                        );
+                        this.particles.push(p);
+                    }
                 }
 
-                if (lineIntersect(p1_2d, p2_2d, cp1, cp2)) {
-                    removeTrianglesConnecting(c.p1.index, c.p2.index);
-                    constraints.splice(i, 1);
+                for (let v = 0; v <= localYSegs; v++) {
+                    for (let u = 0; u <= localXSegs; u++) {
+                        if (u < localXSegs) this.constraints.push(new Constraint(this.particles[index(u, v)], this.particles[index(u + 1, v)], localRestDist));
+                        if (v < localYSegs) this.constraints.push(new Constraint(this.particles[index(u, v)], this.particles[index(u, v + 1)], localRestDist));
+                    }
                 }
+
+                const geo = new THREE.PlaneGeometry(1, 1, localXSegs, localYSegs);
+                const mat = new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide });
+                this.mesh = new THREE.Mesh(geo, mat);
+                this.mesh.castShadow = true;
+                this.mesh.receiveShadow = true;
+                scene.add(this.mesh);
+            }
+
+            updateMesh() {
+                const posAttr = this.mesh.geometry.attributes.position;
+                for (let i = 0; i < this.particles.length; i++) {
+                    posAttr.setXYZ(i, this.particles[i].position.x, this.particles[i].position.y, this.particles[i].position.z);
+                }
+                posAttr.needsUpdate = true;
+                this.mesh.geometry.computeVertexNormals();
+            }
+        }
+
+        class BoxObject extends SimulationObject {
+            constructor(x, y, z, size, color) {
+                super();
+                const half = size / 2;
+                const corners = [
+                    [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+                    [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+                ];
+                for (let c of corners) {
+                    this.particles.push(new Particle(x + c[0], y + c[1], z + c[2], MASS));
+                }
+
+                const addC = (i, j) => {
+                    const d = this.particles[i].position.distanceTo(this.particles[j].position);
+                    this.constraints.push(new Constraint(this.particles[i], this.particles[j], d));
+                };
+
+                // Edges
+                for (let i = 0; i < 4; i++) {
+                    addC(i, (i + 1) % 4);
+                    addC(i + 4, ((i + 1) % 4) + 4);
+                    addC(i, i + 4);
+                }
+                // Diagonals for stability
+                addC(0, 2); addC(1, 3); addC(4, 6); addC(5, 7);
+                addC(0, 5); addC(1, 4); addC(2, 7); addC(3, 6);
+                addC(0, 6); addC(1, 7); addC(2, 4); addC(3, 5);
+
+                this.mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshStandardMaterial({ color }));
+                this.mesh.castShadow = true;
+                this.mesh.receiveShadow = true;
+                scene.add(this.mesh);
+            }
+
+            updateMesh() {
+                const center = new THREE.Vector3();
+                for (let p of this.particles) center.add(p.position);
+                center.divideScalar(8);
+                this.mesh.position.copy(center);
+
+                // Calculate rotation based on particles
+                const xAxis = new THREE.Vector3().subVectors(this.particles[1].position, this.particles[0].position).normalize();
+                const yAxis = new THREE.Vector3().subVectors(this.particles[3].position, this.particles[0].position).normalize();
+                const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
+                const orthoYAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+
+                const matrix = new THREE.Matrix4();
+                matrix.makeBasis(xAxis, orthoYAxis, zAxis);
+                this.mesh.quaternion.setFromRotationMatrix(matrix);
+            }
+        }
+
+        class BallObject extends SimulationObject {
+            constructor(x, y, z, radius, color) {
+                super();
+                this.radius = radius;
+                this.particles.push(new Particle(x, y, z, MASS));
+                this.mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), new THREE.MeshStandardMaterial({ color }));
+                this.mesh.castShadow = true;
+                this.mesh.receiveShadow = true;
+                scene.add(this.mesh);
+            }
+
+            updateMesh() {
+                this.mesh.position.copy(this.particles[0].position);
             }
         }
 
         // --- Inicialização ---
 
         init();
-        setupUI();
+        loadLevel(0);
         animate();
 
-        const swapColors = [0xff4422, 0x22ff44, 0xffcc22, 0xff22cc, 0x2244ff];
-        let colorIndex = 0;
-        setInterval(() => {
-            createCloth(swapColors[colorIndex]);
-            colorIndex = (colorIndex + 1) % swapColors.length;
-        }, 5000);
+        function loadLevel(index) {
+            // Cleanup
+            for (let obj of simulationObjects) {
+                obj.dispose();
+            }
+            simulationObjects = [];
+            if (targetBall) {
+                scene.remove(targetBall);
+                targetBall.geometry.dispose();
+                targetBall.material.dispose();
+                targetBall = null;
+            }
+
+            const config = levelConfigs[index % levelConfigs.length];
+            document.getElementById('level-info').innerText = config.info;
+
+            // Spawn Target Ball at random position
+            const tx = (Math.random() - 0.5) * 400;
+            const tz = (Math.random() - 0.5) * 400;
+            const ty = -70; // Close to floor
+
+            const targetGeo = new THREE.SphereGeometry(15, 32, 32);
+            const targetMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 }); // Gold
+            targetBall = new THREE.Mesh(targetGeo, targetMat);
+            targetBall.position.set(tx, ty, tz);
+            targetBall.castShadow = true;
+            targetBall.receiveShadow = true;
+            scene.add(targetBall);
+
+            // Spawn Obstacles covering the target
+            for (let i = 0; i < config.count; i++) {
+                const ox = tx + (Math.random() - 0.5) * 150;
+                const oz = tz + (Math.random() - 0.5) * 150;
+                const oy = ty + 50 + i * 30;
+                const color = new THREE.Color().setHSL(Math.random(), 0.7, 0.5);
+
+                let type = config.type;
+                if (type === 'mixed') {
+                    const r = Math.random();
+                    if (r < 0.33) type = 'cloth';
+                    else if (r < 0.66) type = 'box';
+                    else type = 'ball';
+                }
+
+                let obj;
+                if (type === 'cloth') {
+                    obj = new ClothObject(ox, oy, oz, color);
+                } else if (type === 'box') {
+                    obj = new BoxObject(ox, oy, oz, 40 + Math.random() * 20, color);
+                } else if (type === 'ball') {
+                    obj = new BallObject(ox, oy, oz, 25 + Math.random() * 10, color);
+                }
+                simulationObjects.push(obj);
+            }
+        }
 
         function init() {
             scene = new THREE.Scene();
@@ -405,15 +406,26 @@
             fillLight.position.set(-200, 200, -200);
             scene.add(fillLight);
 
-            const floorGeo = new THREE.PlaneGeometry(3000, 3000);
-            const floorMat = new THREE.MeshPhongMaterial({ color: 0x080808 });
+            const roomSize = 1200;
+            const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+            const floorMat = new THREE.MeshPhongMaterial({ color: 0x101010 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
             floor.position.y = -100;
             floor.receiveShadow = true;
             scene.add(floor);
 
-            createCloth();
+            // Walls
+            const wallMat = new THREE.MeshPhongMaterial({ color: 0x050505, side: THREE.BackSide });
+            const wallGeo = new THREE.BoxGeometry(roomSize, 1200, roomSize);
+            const room = new THREE.Mesh(wallGeo, wallMat);
+            room.position.y = 500;
+            room.receiveShadow = true;
+            scene.add(room);
+
+            // Visual boundaries (wireframe)
+            const wireframe = new THREE.BoxHelper(room, 0x444444);
+            scene.add(wireframe);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -442,232 +454,65 @@
             window.addEventListener('pointerup', onPointerUp);
 
             const btnGrab = document.getElementById('btn-grab');
-            const btnCut = document.getElementById('btn-cut');
-            const btnRotate = document.getElementById('btn-rotate');
 
             btnGrab.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
                 activeMode = 'grab';
-                btnGrab.classList.add('active');
-                btnCut.classList.remove('active');
-                btnRotate.classList.remove('active');
                 controls.enabled = false;
             });
-
-            btnCut.addEventListener('pointerdown', (e) => {
-                e.stopPropagation();
-                activeMode = 'cut';
-                btnCut.classList.add('active');
-                btnGrab.classList.remove('active');
-                btnRotate.classList.remove('active');
-                controls.enabled = false;
-            });
-
-            btnRotate.addEventListener('pointerdown', (e) => {
-                e.stopPropagation();
-                activeMode = 'rotate';
-                btnRotate.classList.add('active');
-                btnGrab.classList.remove('active');
-                btnCut.classList.remove('active');
-                controls.enabled = true;
-                controls.touches.ONE = THREE.TOUCH.ROTATE;
-            });
         }
 
-        function createCloth(color = 0x2244ff) {
-            if (clothMesh) {
-                scene.remove(clothMesh);
-                if (clothGeometry) clothGeometry.dispose();
-                if (clothMaterial) {
-                    if (clothMaterial.map) clothMaterial.map.dispose();
-                    clothMaterial.dispose();
-                }
-                if (clothMesh.customDepthMaterial) clothMesh.customDepthMaterial.dispose();
-            }
-
-            clothMaterial = new THREE.MeshStandardMaterial({
-                color: color,
-                side: THREE.DoubleSide,
-                roughness: 0.5,
-                metalness: 0.2,
-                map: null
-            });
-
-            particles = [];
-            constraints = [];
-            const index = (u, v) => u + v * (xSegs + 1);
-
-            for (let v = 0; v <= ySegs; v++) {
-                for (let u = 0; u <= xSegs; u++) {
-                    const p = new Particle(
-                        (u - xSegs/2) * restDistance,
-                        (ySegs/2 - v) * restDistance + 150,
-                        (Math.random() - 0.5) * 2,
-                        MASS,
-                        particles.length
-                    );
-                    if (v === 0) p.invMass = 0;
-                    particles.push(p);
-                }
-            }
-
-            for (let v = 0; v <= ySegs; v++) {
-                for (let u = 0; u <= xSegs; u++) {
-                    if (u < xSegs) constraints.push(new Constraint(particles[index(u, v)], particles[index(u + 1, v)], restDistance));
-                    if (v < ySegs) constraints.push(new Constraint(particles[index(u, v)], particles[index(u, v + 1)], restDistance));
-                    if (u < xSegs && v < ySegs) {
-                        constraints.push(new Constraint(particles[index(u, v)], particles[index(u + 1, v + 1)], restDistance * Math.sqrt(2)));
-                        constraints.push(new Constraint(particles[index(u + 1, v)], particles[index(u, v + 1)], restDistance * Math.sqrt(2)));
-                    }
-                }
-            }
-
-            clothGeometry = new THREE.PlaneGeometry(1, 1, xSegs, ySegs);
-            clothMesh = new THREE.Mesh(clothGeometry, clothMaterial);
-            clothMesh.castShadow = true;
-            clothMesh.receiveShadow = true;
-            clothMesh.customDepthMaterial = new THREE.MeshDepthMaterial({
-                depthPacking: THREE.RGBADepthPacking,
-                map: clothMaterial.map,
-                alphaTest: 0.5
-            });
-            scene.add(clothMesh);
-
-            edgeToTriangles.clear();
-            const idxAttr = clothGeometry.getIndex();
-            for (let i = 0; i < idxAttr.count; i += 3) {
-                const a = idxAttr.getX(i);
-                const b = idxAttr.getX(i + 1);
-                const c = idxAttr.getX(i + 2);
-                const addEdge = (v1, v2) => {
-                    const key = v1 < v2 ? `${v1}_${v2}` : `${v2}_${v1}`;
-                    if (!edgeToTriangles.has(key)) edgeToTriangles.set(key, []);
-                    edgeToTriangles.get(key).push(i);
-                };
-                addEdge(a, b); addEdge(b, c); addEdge(c, a);
-            }
-
-            for (let v = 0; v < ySegs; v++) {
-                for (let u = 0; u < xSegs; u++) {
-                    const idx = (u, v) => u + v * (xSegs + 1);
-                    const a = idx(u, v);
-                    const c = idx(u + 1, v + 1);
-                    const t1_idx = (u + v * xSegs) * 6;
-                    const t2_idx = t1_idx + 3;
-                    const key = a < c ? `${a}_${c}` : `${c}_${a}`;
-                    if (!edgeToTriangles.has(key)) edgeToTriangles.set(key, []);
-                    edgeToTriangles.get(key).push(t1_idx, t2_idx);
-                }
-            }
-        }
-
-        // --- Lógica da Interface ---
-        function setupUI() {
-            const btnSettings = document.getElementById('btn-settings');
-            const panel = document.getElementById('settings-panel');
-            const closeBtn = document.getElementById('close-settings');
-            const colorPicker = document.getElementById('color-picker');
-            const fileInput = document.getElementById('texture-upload');
-            const removeTexBtn = document.getElementById('remove-texture');
-
-            btnSettings.addEventListener('click', (e) => {
-                e.stopPropagation();
-                panel.style.display = 'block';
-            });
-
-            closeBtn.addEventListener('click', () => {
-                panel.style.display = 'none';
-            });
-
-            colorPicker.addEventListener('input', (e) => {
-                clothMaterial.color.set(e.target.value);
-            });
-
-            fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const textureLoader = new THREE.TextureLoader();
-                    textureLoader.load(event.target.result, (texture) => {
-                        texture.colorSpace = THREE.SRGBColorSpace;
-                        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                        clothMaterial.map = texture;
-                        clothMaterial.needsUpdate = true;
-                        clothMaterial.color.setHex(0xffffff);
-                        colorPicker.value = "#ffffff";
-                        removeTexBtn.style.display = 'block';
-                    });
-                };
-                reader.readAsDataURL(file);
-            });
-
-            removeTexBtn.addEventListener('click', () => {
-                clothMaterial.map = null;
-                clothMaterial.needsUpdate = true;
-                clothMaterial.color.setHex(0x2244ff);
-                colorPicker.value = "#2244ff";
-                fileInput.value = "";
-                removeTexBtn.style.display = 'none';
-            });
-        }
 
         function onPointerDown(event) {
-            if (activeMode === 'rotate' || (event.pointerType === 'mouse' && event.button !== 0)) return;
-            if (event.target.closest('#settings-panel') || event.target.closest('#btn-settings')) return;
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
 
             updateMousePos(event);
-
-            if (activeMode === 'cut') {
-                isDragging = true;
-                prevMousePos.copy(mousePos);
-                controls.enabled = false;
-                return;
-            }
-
             raycaster.setFromCamera(mousePos, camera);
 
-            let minDist = Infinity;
-            let targetPart = null;
+            // Get all meshes from simulation objects + targetBall
+            const interactiveObjects = simulationObjects.map(obj => obj.mesh);
+            if (targetBall) interactiveObjects.push(targetBall);
 
-            // OTIMIZAÇÃO: Loop de detecção de clique simplificado
-            // Procura partículas próximas ao raio do mouse
-            for (let i = 0; i < particles.length; i++) {
-                const p = particles[i];
-                // Cálculo simples de distância na tela
-                const screenPos = p.position.clone().project(camera);
-                const dist = mousePos.distanceTo(new THREE.Vector2(screenPos.x, screenPos.y));
+            const intersects = raycaster.intersectObjects(interactiveObjects);
 
-                // Aumentei um pouco a área de "pega" já que temos menos vértices
-                if (dist < 0.15) {
-                    const depth = p.position.z;
-                    if (depth < minDist) {
-                        minDist = depth;
-                        targetPart = p;
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                if (hit.object === targetBall) {
+                    winLevel();
+                    return;
+                }
+
+                // Find corresponding SimulationObject and its closest particle
+                for (let obj of simulationObjects) {
+                    if (obj.mesh === hit.object) {
+                        let minDist = Infinity;
+                        let targetPart = null;
+                        for (let p of obj.particles) {
+                            const d = p.position.distanceTo(hit.point);
+                            if (d < minDist) {
+                                minDist = d;
+                                targetPart = p;
+                            }
+                        }
+                        if (targetPart) {
+                            isDragging = true;
+                            draggedParticle = targetPart;
+                            controls.enabled = false;
+                            return;
+                        }
                     }
                 }
-            }
-
-            if (targetPart) {
-                isDragging = true;
-                draggedParticle = targetPart;
-                controls.enabled = false;
             }
         }
 
         function onPointerMove(event) {
             updateMousePos(event);
-            if (activeMode === 'cut' && isDragging) {
-                cutConstraints(prevMousePos, mousePos);
-                prevMousePos.copy(mousePos);
-            }
         }
 
         function onPointerUp() {
             isDragging = false;
             draggedParticle = null;
-            if (activeMode !== 'grab' && activeMode !== 'cut') {
+            if (activeMode !== 'grab') {
                 controls.enabled = true;
             }
         }
@@ -685,9 +530,12 @@
 
         function simulate() {
             forceGravity.set(0, -GRAVITY * MASS, 0);
-            for (let p of particles) {
-                p.addForce(forceGravity);
-                p.integrate(TIMESTEP * TIMESTEP);
+
+            for (let obj of simulationObjects) {
+                for (let p of obj.particles) {
+                    p.addForce(forceGravity);
+                    p.integrate(TIMESTEP * TIMESTEP);
+                }
             }
 
             if (isDragging && draggedParticle) {
@@ -699,33 +547,66 @@
                 draggedParticle.previous.copy(rayPoint);
             }
 
-            // OTIMIZAÇÃO 2: Iterações reduzidas de 16 para 8
             const iterations = 8; 
             for (let i = 0; i < iterations; i++) {
-                for (let constraint of constraints) {
-                    constraint.satisfy();
+                for (let obj of simulationObjects) {
+                    for (let constraint of obj.constraints) {
+                        constraint.satisfy();
+                    }
                 }
             }
 
-            // OTIMIZAÇÃO 3: Removido handleSelfCollision()
-            // Isso era o gargalo principal em JavaScript puro.
-            // O tecido ainda colide com o chão, mas pode atravessar a si mesmo.
-
-            for (let p of particles) {
-                if (p.position.y < -100) p.position.y = -100;
+            for (let obj of simulationObjects) {
+                for (let p of obj.particles) {
+                    // Floor
+                    if (p.position.y < -100) {
+                        p.position.y = -100;
+                        p.previous.y = p.position.y;
+                    }
+                    // Ceiling
+                    if (p.position.y > 1100) {
+                        p.position.y = 1100;
+                        p.previous.y = p.position.y;
+                    }
+                    // Walls X
+                    if (p.position.x < -600) {
+                        p.position.x = -600;
+                        p.previous.x = p.position.x;
+                    }
+                    if (p.position.x > 600) {
+                        p.position.x = 600;
+                        p.previous.x = p.position.x;
+                    }
+                    // Walls Z
+                    if (p.position.z < -600) {
+                        p.position.z = -600;
+                        p.previous.z = p.position.z;
+                    }
+                    if (p.position.z > 600) {
+                        p.position.z = 600;
+                        p.previous.z = p.position.z;
+                    }
+                }
             }
+        }
+
+        function winLevel() {
+            const overlay = document.getElementById('victory-overlay');
+            overlay.style.display = 'block';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                currentLevel++;
+                loadLevel(currentLevel);
+            }, 2000);
         }
 
         function animate() {
             requestAnimationFrame(animate);
             simulate();
 
-            const posAttr = clothGeometry.attributes.position;
-            for (let i = 0; i < particles.length; i++) {
-                posAttr.setXYZ(i, particles[i].position.x, particles[i].position.y, particles[i].position.z);
+            for (let obj of simulationObjects) {
+                obj.updateMesh();
             }
-            posAttr.needsUpdate = true;
-            clothGeometry.computeVertexNormals();
 
             controls.update();
             renderer.render(scene, camera);
